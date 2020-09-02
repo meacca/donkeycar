@@ -66,8 +66,10 @@ See [home page](http://donkeycar.com), [docs](http://docs.donkeycar.com)
 or join the [Discord server](http://www.donkeycar.com/community.html) to learn more.
 
 # What's new?
-Added new model - modification of stock linear model. Use --type=new_model when running the train script.
+Added two new models:
+1. Modification of stock linear model. Use --type=new_model when running the train script.
+2. Modification of stock rnn model. Use --type=lstm_concat_pooling when running the train script
 
 Modifications:
 1. Added BatchNormalization between convolution layers.
-2. Concat Pooling (GlobalAveragePooling, GlobalMaxPooling) after convolution layers.
+2. Concat Pooling (GlobalAveragePooling + GlobalMaxPooling) after LSTM on all outputs instead just taking the last output.
