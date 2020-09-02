@@ -21,6 +21,7 @@ from tensorflow.python.keras.layers import Input, Dense
 from tensorflow.python.keras.models import Model, Sequential
 from tensorflow.python.keras.layers import Convolution2D, MaxPooling2D, Reshape, BatchNormalization
 from tensorflow.python.keras.layers import GlobalMaxPooling2D, GlobalAveragePooling2D, Concatenate
+from tensorflow.python.keras.layers import GlobalMaxPooling1D, GlobalAveragePooling1D
 from tensorflow.python.keras.layers import Activation, Dropout, Flatten, Cropping2D, Lambda
 from tensorflow.python.keras.layers.merge import concatenate
 from tensorflow.python.keras.layers import LSTM
@@ -571,11 +572,50 @@ class KerasRNN_LSTM(KerasPilot):
         steering = outputs[0][0]
         throttle = outputs[0][1]
         return steering, throttle
-  
+
+
+class KerasLSTMConcatPooling(KerasPilot):
+    def __init__(self, image_w=160, image_h=120, image_d=3, seq_length=3, roi_crop=(0, 0), num_outputs=2, *args,
+                 **kwargs):
+        super(KerasLSTMConcatPooling, self).__init__(*args, **kwargs)
+        input_shape = (image_h, image_w, image_d)
+        self.model = lstm_concat_pooling(seq_length=seq_length,
+                                         num_outputs=num_outputs,
+                                         input_shape=input_shape,
+                                         roi_crop=roi_crop)
+        self.seq_length = seq_length
+        self.image_d = image_d
+        self.image_w = image_w
+        self.image_h = image_h
+        self.img_seq = []
+        self.compile()
+        self.optimizer = "rmsprop"
+
+    def compile(self):
+        self.model.compile(optimizer=self.optimizer,
+                           loss='mse')
+
+    def run(self, img_arr):
+        if img_arr.shape[2] == 3 and self.image_d == 1:
+            img_arr = dk.utils.rgb2gray(img_arr)
+
+        while len(self.img_seq) < self.seq_length:
+            self.img_seq.append(img_arr)
+
+        self.img_seq = self.img_seq[1:]
+        self.img_seq.append(img_arr)
+
+        img_arr = np.array(self.img_seq).reshape(1, self.seq_length, self.image_h, self.image_w, self.image_d)
+        outputs = self.model.predict([img_arr])
+        steering = outputs[0][0]
+        throttle = outputs[0][1]
+        return steering, throttle
+
 
 def rnn_lstm(seq_length=3, num_outputs=2, input_shape=(120,160,3), roi_crop=(0, 0)):
 
-    #we now expect that cropping done elsewhere. we will adjust our expeected image size here:
+    # we now expect that cropping done elsewhere. we will adjust our expeected image size here:
+
     input_shape = adjust_input_shape(input_shape, roi_crop)
 
     img_seq_shape = (seq_length,) + input_shape   
@@ -608,6 +648,46 @@ def rnn_lstm(seq_length=3, num_outputs=2, input_shape=(120,160,3), roi_crop=(0, 
     
     return x
 
+
+def lstm_concat_pooling(seq_length=3, num_outputs=2, input_shape=(120,160,3), roi_crop=(0, 0)):
+
+    img_seq_shape = (seq_length,) + input_shape
+    img_in = Input(shape=img_seq_shape, name='img_in')
+    drop_out = 0.3
+
+    x = img_in
+
+    x = TD(Convolution2D(24, (5, 5), strides=(2, 2), activation='relu'), input_shape=img_seq_shape)(x)
+    x = TD(Dropout(drop_out))(x)
+    x = TD(Convolution2D(32, (5, 5), strides=(2, 2), activation='relu'))(x)
+    x = TD(Dropout(drop_out))(x)
+    x = TD(Convolution2D(32, (3, 3), strides=(2, 2), activation='relu'))(x)
+    x = TD(Dropout(drop_out))(x)
+    x = TD(Convolution2D(32, (3, 3), strides=(1, 1), activation='relu'))(x)
+    x = TD(Dropout(drop_out))(x)
+    x = TD(MaxPooling2D(pool_size=(2, 2)))(x)
+    x = TD(Flatten(name='flattened'))(x)
+    x = TD(Dense(100, activation='relu'))(x)
+    x = TD(Dropout(drop_out))(x)
+
+    x = LSTM(128, return_sequences=True, name="LSTM_seq")(x)
+    x = Dropout(.1)(x)
+    x = LSTM(128, return_sequences=True, name="LSTM_fin")(x)
+    x = Dropout(.1)(x)
+
+    max_pool = GlobalMaxPooling1D(data_format='channels_last')(x)
+    avg_pool = GlobalAveragePooling1D(data_format='channels_last')(x)
+    x = Concatenate(axis=-1)([max_pool, avg_pool])
+
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(.1)(x)
+    x = Dense(64, activation='relu')(x)
+    x = Dense(10, activation='relu')(x)
+    x = Dense(num_outputs, activation='linear', name='model_outputs')(x)
+
+    model = Model(inputs=[img_in], outputs=x)
+
+    return model
 
 class Keras3D_CNN(KerasPilot):
     def __init__(self, image_w =160, image_h=120, image_d=3, seq_length=20, num_outputs=2, roi_crop=(0, 0), *args, **kwargs):
