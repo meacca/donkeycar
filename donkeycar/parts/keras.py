@@ -399,11 +399,8 @@ def default_n_linear_new(num_outputs, input_shape=(120, 160, 3), roi_crop=(0, 0)
     x = Convolution2D(64, (3,3), strides=(1,1), activation='relu', name="conv2d_5")(x)
     x = Dropout(drop)(x)
     x = BatchNormalization()(x)
-    
-    max_pool = GlobalMaxPooling2D()(x)
-    avg_pool = GlobalAveragePooling2D()(x)
-    
-    x = Concatenate(axis=-1)([max_pool, avg_pool])
+
+    x = Flatten(name='flattened')(x)
     x = Dense(100, activation='relu')(x)
     x = Dropout(drop)(x)
     x = Dense(50, activation='relu')(x)
