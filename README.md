@@ -64,3 +64,10 @@ V.start(rate_hz=10)
 
 See [home page](http://donkeycar.com), [docs](http://docs.donkeycar.com)
 or join the [Discord server](http://www.donkeycar.com/community.html) to learn more.
+
+# What's new?
+Added new model - modification of stock linear model. Use --type=new_model when running the train script.
+
+Modifications:
+1. Added BatchNormalization between convolution layers.
+2. Concat Pooling (GlobalAveragePooling, GlobalMaxPooling) after convolution layers.
